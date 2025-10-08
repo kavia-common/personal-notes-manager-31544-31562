@@ -1,0 +1,21 @@
+---
+export interface Props {
+  tags: string[];
+  clickable?: boolean;
+}
+const { tags = [], clickable = false } = Astro.props;
+---
+
+<div style="display:flex;flex-wrap:wrap;gap:6px;">
+  {tags.map((t) => (
+    <span
+      class="tag"
+      onclick={clickable ? `window.dispatchEvent(new CustomEvent('notes:filter',{detail:{tags:['${t}']}}))` : undefined}
+      role={clickable ? 'button' : undefined}
+      tabindex={clickable ? '0' : undefined}
+      aria-label={clickable ? `Filter by tag ${t}` : undefined}
+    >
+      #{t}
+    </span>
+  ))}
+</div>

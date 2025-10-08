@@ -1,11 +1,169 @@
 ---
-import Welcome from '../components/Welcome.astro';
 import Layout from '../layouts/Layout.astro';
+import Topbar from '../components/Topbar.astro';
+import Sidebar from '../components/Sidebar.astro';
+import NoteItem from '../components/NoteItem.astro';
 
-// Welcome to Astro! Wondering what to do next? Check out the Astro documentation at https://docs.astro.build
-// Don't want to use any of this? Delete everything in this file, the `assets`, `components`, and `layouts` directories, and start fresh.
 ---
-
 <Layout>
-	<Welcome />
+  <Fragment slot="topbar">
+    <Topbar />
+  </Fragment>
+
+  <Fragment slot="sidebar">
+    <div id="sidebar-content"></div>
+  </Fragment>
+
+  <section>
+    <div class="flex items-center justify-between mb-16">
+      <h2 style="margin:0;font-size:16px;">All Notes</h2>
+      <div class="flex items-center gap-12">
+        <button class="btn ghost" onclick="location.reload()">Refresh</button>
+      </div>
+    </div>
+    <div id="notes-list" class="note-grid"></div>
+
+    <div class="mt-24">
+      <h3 style="margin:0 0 8px 0;font-size:15px;">Quick Create</h3>
+      <div class="card p-16">
+        <form id="quick-form" class="flex items-center gap-12" onsubmit="return false;">
+          <input class="input" name="title" placeholder="New note title..." aria-label="New note title" />
+          <button class="btn" type="submit">Create</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    /** @type {any} */
+    import { NotesAPI } from '../lib/notesService';
+    (function(){
+    async function render() {
+      const url = new URL(window.location.href);
+      const q = url.searchParams.get('q') || '';
+      const tags = (url.searchParams.get('tags') || '').split(',').map(s=>s.trim()).filter(Boolean);
+
+      // Render sidebar with tags
+      const allTags = await NotesAPI.tags();
+      const sidebar = document.getElementById('sidebar-content');
+      if (sidebar) {
+        sidebar.innerHTML = '';
+        const el = document.createElement('div');
+        el.innerHTML = `<div></div>`;
+        sidebar.appendChild(el);
+      }
+
+      // render notes list
+      const notes = await NotesAPI.search(q, tags);
+      const list = document.getElementById('notes-list');
+      if (list) {
+        list.innerHTML = '';
+        if (notes.length === 0) {
+          const empty = document.createElement('div');
+          empty.className = 'card p-16';
+          empty.innerHTML = '<div class="text-muted">No notes found. Create your first note!</div>';
+          list.appendChild(empty);
+        } else {
+          for (const n of notes) {
+            const wrapper = document.createElement('div');
+            wrapper.innerHTML = `<div></div>`;
+            // hydrate server-rendered NoteItem by requesting its route is overkill; generate here:
+            wrapper.innerHTML = `
+              <a class="card p-16" href="/note/${n.id}">
+                <div class="flex items-center justify-between">
+                  <h3 style="margin:0 0 6px 0;font-size:16px;">${escapeHTML(n.title || 'Untitled')}</h3>
+                  <span class="text-muted" style="font-size:12px;">${new Date(n.updatedAt).toLocaleString()}</span>
+                </div>
+                <p class="text-muted" style="margin:0 0 10px 0; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;">
+                  ${escapeHTML(n.content || 'No content')}
+                </p>
+                <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                  ${n.tags.map(t=>`<span class="tag" role="button" tabindex="0" onclick="applyTags(['${t}'])">#${escapeHTML(t)}</span>`).join('')}
+                </div>
+              </a>
+            `;
+            list.appendChild(wrapper.firstElementChild);
+          }
+        }
+      }
+
+      // Render sidebar component via client
+      const sidebarHost = document.getElementById('sidebar-content');
+      if (sidebarHost) {
+        sidebarHost.innerHTML = `
+          <div>
+            <div class="section-title">Filters</div>
+            <div class="card p-16">
+              <div class="flex items-center justify-between">
+                <div class="text-muted">Tags</div>
+                <button class="btn ghost" onclick="applyTags([])">Clear</button>
+              </div>
+              <div class="mt-12" style="display:flex;flex-wrap:wrap;gap:8px;">
+                ${allTags.length === 0 ? `<span class="text-muted">No tags yet</span>` :
+                  allTags.map(t => `
+                    <button class="tag" style="border-color:${tags.includes(t)?'var(--color-primary)':'#e5e7eb'}; background:${tags.includes(t)?'rgba(37,99,235,0.08)':'#eef2ff'};" onclick="toggleTag('${t}')">#${t}</button>
+                  `).join('')}
+              </div>
+              <hr class="sep" />
+              <div class="text-muted" style="font-size:13px;">Tip: press <kbd>N</kbd> to create a new note quickly.</div>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    function setQuery(q) {
+      const url = new URL(window.location.href);
+      if (q) url.searchParams.set('q', q); else url.searchParams.delete('q');
+      history.replaceState(null, '', url.toString());
+      render();
+    }
+    function applyTags(tags) {
+      const url = new URL(window.location.href);
+      if (tags && tags.length) url.searchParams.set('tags', tags.join(',')); else url.searchParams.delete('tags');
+      history.replaceState(null, '', url.toString());
+      render();
+    }
+    function toggleTag(tag) {
+      const url = new URL(window.location.href);
+      const parts = (url.searchParams.get('tags') || '').split(',').map(s=>s.trim()).filter(Boolean);
+      const idx = parts.indexOf(tag);
+      if (idx>-1) parts.splice(idx,1); else parts.push(tag);
+      if (parts.length) url.searchParams.set('tags', parts.join(',')); else url.searchParams.delete('tags');
+      history.replaceState(null, '', url.toString());
+      render();
+    }
+    function escapeHTML(s){return s.replace(/[&<>"']/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]||c));}
+
+    window.addEventListener('notes:search', (e) => setQuery(e.detail.q || ''));
+    window.addEventListener('notes:filter', (e) => applyTags(e.detail.tags || []));
+    window.addEventListener('notes:new', () => location.href = '/note/new');
+
+    // quick create
+    document.addEventListener('DOMContentLoaded', () => {
+      const form = document.getElementById('quick-form');
+      if (form) {
+        form.addEventListener('submit', async () => {
+          const input = (form.querySelector('input[name="title"]'));
+          const title = (input && 'value' in input) ? input.value.trim() : '';
+          if (!title) return;
+          const { create } = await import('../lib/notesService'); // not used; dynamic import placeholder
+          const { NotesAPI } = await import('../lib/notesService');
+          const n = await NotesAPI.create({ title, content: '', tags: [] });
+          location.href = `/note/${n.id}`;
+        });
+      }
+
+      // keyboard shortcut N
+      window.addEventListener('keydown', (ev) => {
+        if ((ev.key === 'n' || ev.key === 'N') && !ev.metaKey && !ev.ctrlKey && !ev.altKey) {
+          ev.preventDefault();
+          window.dispatchEvent(new Event('notes:new'));
+        }
+      });
+
+      render();
+    });
+    })();
+  </script>
 </Layout>

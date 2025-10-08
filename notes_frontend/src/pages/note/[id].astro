@@ -1,0 +1,125 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import Topbar from '../../components/Topbar.astro';
+import NoteEditor from '../../components/NoteEditor.astro';
+
+// Provide empty static paths to satisfy build without server adapter.
+// We will render this page shell and hydrate content client-side.
+export async function getStaticPaths() {
+  return [];
+}
+export const prerender = true;
+---
+
+<Layout>
+  <Fragment slot="topbar">
+    <Topbar />
+  </Fragment>
+
+  <Fragment slot="sidebar">
+    <div class="card p-16">
+      <button class="btn ghost" onclick="history.back()">← Back</button>
+    </div>
+  </Fragment>
+
+  <section>
+    <div id="editor-host"></div>
+  </section>
+
+  <script>
+    import { NotesAPI } from '../../lib/notesService';
+
+    async function boot() {
+      const id = decodeURIComponent(location.pathname.split('/').pop() || '');
+      if (id === 'new') {
+        renderEditor({ title:'', content:'', tags:[] }, 'create');
+      } else {
+        const note = await NotesAPI.get(id);
+        if (!note) {
+          const host = document.getElementById('editor-host');
+          if (host) {
+            host.innerHTML = '<div class="card p-16"><div class="text-muted">Note not found.</div></div>';
+          }
+          return;
+        }
+        renderEditor(note, 'edit');
+      }
+    }
+
+    function renderEditor(note, mode) {
+      const host = document.getElementById('editor-host');
+      if (!host) return;
+      host.innerHTML = `
+        <div class="mb-16">
+          <div class="flex items-center justify-between">
+            <h2 style="margin:0;font-size:18px;">${mode==='create'?'New Note':'Edit Note'}</h2>
+            <div class="flex items-center gap-12">
+              <button class="btn ghost" onclick="location.href='/'">All Notes</button>
+            </div>
+          </div>
+        </div>
+        <div class="card p-16">
+          <form id="note-form">
+            <div class="mb-12">
+              <label for="title">Title</label>
+              <input id="title" name="title" class="input" placeholder="Note title" value="${escapeHTML(note.title || '')}" required />
+            </div>
+            <div class="mb-12">
+              <label for="content">Content (Markdown supported)</label>
+              <textarea id="content" name="content" class="textarea" placeholder="Write your note...">${escapeHTML(note.content || '')}</textarea>
+            </div>
+            <div class="mb-12">
+              <label for="tags">Tags (comma separated)</label>
+              <input id="tags" name="tags" class="tag-input" placeholder="e.g. work, ideas, tasks" value="${(note.tags||[]).join(', ')}" />
+            </div>
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-12">
+                <button class="btn" type="submit">${mode==='create'?'Save Note':'Update Note'}</button>
+                ${mode==='edit' ? `<button class="btn secondary" type="button" id="duplicate-btn">Duplicate</button>`:''}
+              </div>
+              ${mode==='edit' ? `<button class="btn ghost" type="button" id="delete-btn" style="color:var(--color-error);border-color:rgba(239,68,68,.3)">Delete</button>`:''}
+            </div>
+          </form>
+        </div>
+      `;
+
+      const form = document.getElementById('note-form');
+      form?.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const fd = new FormData(form);
+        const title = (fd.get('title') || '').toString().trim();
+        const content = (fd.get('content') || '').toString();
+        const rawTags = (fd.get('tags') || '').toString();
+        const tags = rawTags.split(',').map(t=>t.trim()).filter(Boolean);
+        if (mode === 'create') {
+          const n = await NotesAPI.create({ title, content, tags });
+          location.href = `/note/${n.id}`;
+        } else {
+          const id = decodeURIComponent(location.pathname.split('/').pop() || '');
+          await NotesAPI.update(id, { title, content, tags });
+          location.href = `/note/${id}`;
+        }
+      });
+
+      const del = document.getElementById('delete-btn');
+      del?.addEventListener('click', async () => {
+        const id = decodeURIComponent(location.pathname.split('/').pop() || '');
+        const ok = confirm('Delete this note?');
+        if (!ok) return;
+        await NotesAPI.remove(id);
+        location.href = '/';
+      });
+
+      const dup = document.getElementById('duplicate-btn');
+      dup?.addEventListener('click', async () => {
+        const id = decodeURIComponent(location.pathname.split('/').pop() || '');
+        const n = await NotesAPI.duplicate(id);
+        if (n) location.href = `/note/${n.id}`;
+      });
+    }
+
+    function escapeHTML(s){return (s||'').toString().replace(/[&<>"']/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]||c));}
+
+    document.addEventListener('DOMContentLoaded', boot);
+  </script>
+</Layout>

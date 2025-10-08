@@ -1,0 +1,35 @@
+---
+export interface Props {
+  tags?: string[];
+  activeTags?: string[];
+}
+const { tags = [], activeTags = [] } = Astro.props;
+const allTags = Array.from(new Set(tags)).sort((a,b)=>a.localeCompare(b));
+---
+
+<div>
+  <div class="section-title">Filters</div>
+  <div class="card p-16">
+    <div class="flex items-center justify-between">
+      <div class="text-muted">Tags</div>
+      <button class="btn ghost" onclick="window.dispatchEvent(new CustomEvent('notes:filter',{detail:{tags:[]}}))">Clear</button>
+    </div>
+    <div class="mt-12" style="display:flex;flex-wrap:wrap;gap:8px;">
+      {allTags.length === 0 ? (
+        <span class="text-muted">No tags yet</span>
+      ) : (
+        allTags.map((t) => (
+          <button
+            class={"tag"}
+            style={`border-color:${activeTags.includes(t)?'var(--color-primary)':'#e5e7eb'}; background:${activeTags.includes(t)?'rgba(37,99,235,0.08)':'#eef2ff'};`}
+            onclick={`(function(){const active=${JSON.stringify(activeTags)};const tag=${JSON.stringify(t)};const idx=active.indexOf(tag);if(idx>-1){active.splice(idx,1)}else{active.push(tag)};window.dispatchEvent(new CustomEvent('notes:filter',{detail:{tags:active}}))})()`}
+          >
+            #{t}
+          </button>
+        ))
+      )}
+    </div>
+    <hr class="sep" />
+    <div class="text-muted" style="font-size:13px;">Tip: press <kbd>N</kbd> to create a new note quickly.</div>
+  </div>
+</div>

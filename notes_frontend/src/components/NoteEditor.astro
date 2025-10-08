@@ -1,0 +1,76 @@
+---
+import TagPills from './TagPills.astro';
+
+export interface Note {
+  id?: string;
+  title: string;
+  content: string;
+  tags: string[];
+}
+
+export interface Props {
+  note?: Note;
+  mode?: 'create'|'edit';
+}
+const { note = { title:'', content:'', tags:[] }, mode = 'create' } = Astro.props;
+const noteId = (note as any).id ?? '';
+---
+
+<div class="card p-16">
+  <form id="note-form">
+    <div class="mb-12">
+      <label for="title">Title</label>
+      <input id="title" name="title" class="input" placeholder="Note title" value={note.title} required />
+    </div>
+    <div class="mb-12">
+      <label for="content">Content (Markdown supported)</label>
+      <textarea id="content" name="content" class="textarea" placeholder="Write your note...">{note.content}</textarea>
+    </div>
+    <div class="mb-12">
+      <label for="tags">Tags (comma separated)</label>
+      <input id="tags" name="tags" class="tag-input" placeholder="e.g. work, ideas, tasks" value={note.tags.join(', ')} />
+      <div class="mt-8">
+        <TagPills tags={note.tags} />
+      </div>
+    </div>
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-12">
+        <button class="btn" type="submit">{mode === 'create' ? 'Save Note' : 'Update Note'}</button>
+        {mode === 'edit' && (
+          <button class="btn secondary" type="button" onclick={`window.dispatchEvent(new CustomEvent('notes:duplicate',{detail:{id:'${noteId}'}}))`}>Duplicate</button>
+        )}
+      </div>
+      {mode === 'edit' && (
+        <button class="btn ghost" type="button" style="color:var(--color-error);border-color:rgba(239,68,68,.3)" onclick={`window.dispatchEvent(new CustomEvent('notes:delete',{detail:{id:'${noteId}'}}))`}>
+          Delete
+        </button>
+      )}
+    </div>
+  </form>
+</div>
+
+<script>
+  // PUBLIC_INTERFACE
+  /** Handles note form submit and dispatches events to the notes service layer. */
+  (function(){
+    const form = document.getElementById('note-form');
+    if(!form) return;
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(form);
+      const title = (fd.get('title') || '').toString().trim();
+      const content = (fd.get('content') || '').toString();
+      const rawTags = (fd.get('tags') || '').toString();
+      const tags = rawTags.split(',').map(t=>t.trim()).filter(Boolean);
+
+      const payload = { title, content, tags };
+
+      if ('${noteId}') {
+        window.dispatchEvent(new CustomEvent('notes:update', { detail: { id: '${noteId}', data: payload }}));
+      } else {
+        window.dispatchEvent(new CustomEvent('notes:create', { detail: { data: payload }}));
+      }
+    });
+  })();
+</script>

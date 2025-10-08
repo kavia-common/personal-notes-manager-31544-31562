@@ -1,0 +1,31 @@
+---
+export interface Props {
+  search?: string;
+}
+const { search = '' } = Astro.props;
+---
+
+<div class="w-full">
+  <div class="flex items-center justify-between gap-12">
+    <div class="flex items-center gap-12">
+      <h1 style="margin:0;font-size:18px;font-weight:600;">Personal Notes</h1>
+      <span class="badge">Ocean Professional</span>
+    </div>
+    <div class="flex items-center gap-12 w-full" style="max-width:720px;">
+      <label class="w-full" for="search" aria-label="Search notes">
+        <input
+          id="search"
+          class="input w-full"
+          type="search"
+          placeholder="Search notes (title, content, tags)..."
+          value={search}
+          oninput="window.dispatchEvent(new CustomEvent('notes:search',{detail:{q:this.value}}))"
+        />
+      </label>
+      <button class="btn" onclick="window.dispatchEvent(new Event('notes:new'))" aria-label="Add note">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="white" stroke-width="2" stroke-linecap="round"/></svg>
+        New
+      </button>
+    </div>
+  </div>
+</div>
